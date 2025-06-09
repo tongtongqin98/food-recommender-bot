@@ -8,20 +8,90 @@ app = Flask(__name__)
 
 # ------------------- Enhanced Food Data -------------------
 FOOD_ITEMS = [
-    {"name": "Cold noodles", "weather": "hot", "type": "spicy", "goal": "light"},
-    {"name": "Fruit salad", "weather": "hot", "type": "sweet", "goal": "light"},
-    {"name": "Iced tea with sandwich", "weather": "hot", "type": "neutral", "goal": "light"},
-    {"name": "Hot pot", "weather": "cold", "type": "spicy", "goal": "warm"},
-    {"name": "Kimchi stew", "weather": "cold", "type": "spicy", "goal": "warm"},
-    {"name": "Ramen", "weather": "cold", "type": "salty", "goal": "warm"},
-    {"name": "Bibimbap", "weather": "neutral", "type": "spicy", "goal": "balance"},
-    {"name": "Fried rice", "weather": "neutral", "type": "salty", "goal": "energy"},
-    {"name": "Grilled chicken", "weather": "neutral", "type": "protein", "goal": "muscle"}
+    {
+        "name": "Cold noodles",
+        "weather": ["hot"],
+        "type": ["spicy", "light"],
+        "goal": ["light"],
+        "time": ["lunch", "dinner"],
+        "calories": 350
+    },
+    {
+        "name": "Fruit salad",
+        "weather": ["hot"],
+        "type": ["sweet", "light"],
+        "goal": ["lose weight"],
+        "time": ["breakfast", "lunch"],
+        "calories": 250
+    },
+    {
+        "name": "Iced tofu soup",
+        "weather": ["hot"],
+        "type": ["salty"],
+        "goal": ["light"],
+        "time": ["lunch"],
+        "calories": 300
+    },
+    {
+        "name": "Kimchi stew",
+        "weather": ["cold"],
+        "type": ["spicy"],
+        "goal": ["warm"],
+        "time": ["dinner"],
+        "calories": 500
+    },
+    {
+        "name": "Ramen",
+        "weather": ["cold"],
+        "type": ["salty"],
+        "goal": ["warm", "energy"],
+        "time": ["lunch", "dinner"],
+        "calories": 650
+    },
+    {
+        "name": "Grilled salmon",
+        "weather": ["neutral", "cold"],
+        "type": ["protein", "salty"],
+        "goal": ["muscle"],
+        "time": ["lunch", "dinner"],
+        "calories": 480
+    },
+    {
+        "name": "Bibimbap",
+        "weather": ["neutral"],
+        "type": ["spicy", "rice"],
+        "goal": ["balance"],
+        "time": ["lunch", "dinner"],
+        "calories": 550
+    },
+    {
+        "name": "Avocado toast",
+        "weather": ["neutral", "hot"],
+        "type": ["light", "vegetarian"],
+        "goal": ["healthy", "lose weight"],
+        "time": ["breakfast"],
+        "calories": 300
+    },
+    {
+        "name": "Chicken breast with broccoli",
+        "weather": ["neutral", "cold"],
+        "type": ["protein"],
+        "goal": ["muscle", "healthy"],
+        "time": ["lunch", "dinner"],
+        "calories": 400
+    },
+    {
+        "name": "Sweet and sour pork",
+        "weather": ["neutral"],
+        "type": ["sweet", "meat"],
+        "goal": ["energy"],
+        "time": ["dinner"],
+        "calories": 700
+    }
 ]
 
 USER_DATA_FILE = "user_data.json"
 
-# ------------------- Load or Save User Data -------------------
 def load_user_data():
     try:
         with open(USER_DATA_FILE, "r") as f:
@@ -33,16 +103,20 @@ def save_user_data(data):
     with open(USER_DATA_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-# ------------------- Scoring-based Recommendation -------------------
-def score_food(item, preference, goal):
+def score_food(item, weather, preference, goal, time):
     score = 0
-    if preference and preference.lower() in item["type"]:
-        score += 2
-    if goal and goal.lower() in item["goal"]:
+    if weather and weather in item["weather"]:
+        score += 1
+    if preference:
+        score += 2 if preference in item["type"] else 0
+    if goal:
+        score += 2 if goal in item["goal"] else 0
+    if time:
+        score += 1 if time in item["time"] else 0
+    if item["calories"] <= 600:
         score += 1
     return score
 
-# ------------------- Main Webhook Route -------------------
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
@@ -62,25 +136,25 @@ def webhook():
         preference = parameters.get("food_preference", "")
         goal = parameters.get("health_goal", "")
         recent_meal = parameters.get("recent_meal", "")
+        time = parameters.get("meal_time", "lunch")
 
-        # Filter and score food
-        filtered = [f for f in FOOD_ITEMS if f["weather"] == weather]
-        scored = sorted(filtered, key=lambda x: score_food(x, preference, goal), reverse=True)
+        scored_items = [
+            (item, score_food(item, weather, preference, goal, time))
+            for item in FOOD_ITEMS
+            if item["name"] != recent_meal
+        ]
 
-        # Avoid recently eaten food
-        recommendations = [f["name"] for f in scored if f["name"] != recent_meal]
-        final_recommend = recommendations[:3] if recommendations else ["Bibimbap"]
+        top_items = sorted(scored_items, key=lambda x: x[1], reverse=True)[:3]
+        names = [item["name"] for item in top_items]
 
-        # Save history
         user_data[user_id]["history"].append({
             "time": str(datetime.datetime.now()),
-            "recommendation": final_recommend
+            "recommendation": names
         })
         save_user_data(user_data)
 
-        return jsonify({
-            "fulfillmentText": f"Based on your preferences, I recommend: {', '.join(final_recommend)}"
-        }), 200
+        response_text = f"Based on your preferences, I recommend: {', '.join(names)}."
+        return jsonify({"fulfillmentText": response_text}), 200
 
     except Exception as e:
         print("Error occurred:", e)
