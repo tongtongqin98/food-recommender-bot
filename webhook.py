@@ -1,166 +1,86 @@
+
 from flask import Flask, request, jsonify
-import json
-import random
-import datetime
 import os
 
 app = Flask(__name__)
 
-# ------------------- Enhanced Food Data -------------------
-FOOD_ITEMS = [
-    {
-        "name": "Cold noodles",
-        "weather": ["hot"],
-        "type": ["spicy", "light"],
-        "goal": ["light"],
-        "time": ["lunch", "dinner"],
-        "calories": 350
-    },
-    {
-        "name": "Fruit salad",
-        "weather": ["hot"],
-        "type": ["sweet", "light"],
-        "goal": ["lose weight"],
-        "time": ["breakfast", "lunch"],
-        "calories": 250
-    },
-    {
-        "name": "Iced tofu soup",
-        "weather": ["hot"],
-        "type": ["salty"],
-        "goal": ["light"],
-        "time": ["lunch"],
-        "calories": 300
-    },
-    {
-        "name": "Kimchi stew",
-        "weather": ["cold"],
-        "type": ["spicy"],
-        "goal": ["warm"],
-        "time": ["dinner"],
-        "calories": 500
-    },
-    {
-        "name": "Ramen",
-        "weather": ["cold"],
-        "type": ["salty"],
-        "goal": ["warm", "energy"],
-        "time": ["lunch", "dinner"],
-        "calories": 650
-    },
-    {
-        "name": "Grilled salmon",
-        "weather": ["neutral", "cold"],
-        "type": ["protein", "salty"],
-        "goal": ["muscle"],
-        "time": ["lunch", "dinner"],
-        "calories": 480
-    },
-    {
-        "name": "Bibimbap",
-        "weather": ["neutral"],
-        "type": ["spicy", "rice"],
-        "goal": ["balance"],
-        "time": ["lunch", "dinner"],
-        "calories": 550
-    },
-    {
-        "name": "Avocado toast",
-        "weather": ["neutral", "hot"],
-        "type": ["light", "vegetarian"],
-        "goal": ["healthy", "lose weight"],
-        "time": ["breakfast"],
-        "calories": 300
-    },
-    {
-        "name": "Chicken breast with broccoli",
-        "weather": ["neutral", "cold"],
-        "type": ["protein"],
-        "goal": ["muscle", "healthy"],
-        "time": ["lunch", "dinner"],
-        "calories": 400
-    },
-    {
-        "name": "Sweet and sour pork",
-        "weather": ["neutral"],
-        "type": ["sweet", "meat"],
-        "goal": ["energy"],
-        "time": ["dinner"],
-        "calories": 700
-    }
-]
+# 食物推荐数据库
+food_recommendations = {
+    "spicy": ["Kimchi Stew", "Spicy Hot Pot", "Tteokbokki", "Spicy Fried Chicken"],
+    "cold": ["Cold Noodles", "Chilled Tofu", "Fresh Salad"],
+    "healthy": ["Grilled Salmon", "Quinoa Salad", "Steamed Vegetables", "Tofu Bowl"],
+    "default": ["Bibimbap", "Fried Rice", "Ramen", "Sandwich"]
+}
 
-USER_DATA_FILE = "user_data.json"
-
-def load_user_data():
-    try:
-        with open(USER_DATA_FILE, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-
-def save_user_data(data):
-    with open(USER_DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-def score_food(item, weather, preference, goal, time):
-    score = 0
-    if weather and weather in item["weather"]:
-        score += 1
-    if preference:
-        score += 2 if preference in item["type"] else 0
-    if goal:
-        score += 2 if goal in item["goal"] else 0
-    if time:
-        score += 1 if time in item["time"] else 0
-    if item["calories"] <= 600:
-        score += 1
-    return score
+# 自然推荐语构建
+def build_response(recommendations, context=""):
+    if not recommendations:
+        return "Hmm... I couldn't find anything tasty right now. 😢"
+    phrase = f"{context} You might enjoy {recommendations[0]}"
+    if len(recommendations) > 1:
+        phrase += f", or maybe {', '.join(recommendations[1:3])}."
+    return phrase
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    try:
-        print("Webhook hit!")
-        req = request.get_json(force=True)
-        print("Request JSON:", req)
+    req = request.get_json()
+    print("Webhook hit!")
+    print("Request JSON:", req)
 
-        intent = req.get("queryResult", {}).get("intent", {}).get("displayName")
-        parameters = req.get("queryResult", {}).get("parameters", {})
-        user_id = req.get("originalDetectIntentRequest", {}).get("payload", {}).get("userId", "default")
+    intent = req.get("queryResult", {}).get("intent", {}).get("displayName", "")
+    parameters = req.get("queryResult", {}).get("parameters", {})
 
-        user_data = load_user_data()
-        if user_id not in user_data:
-            user_data[user_id] = {"history": []}
+    food_pref = parameters.get("food_preference", "").lower()
+    weather = parameters.get("weather_type", "").lower()
+    delivery = parameters.get("delivery_option", "").lower()  # 例如 delivery / dine-in
 
-        weather = parameters.get("weather_type", "neutral")
-        preference = parameters.get("food_preference", "")
-        goal = parameters.get("health_goal", "")
-        recent_meal = parameters.get("recent_meal", "")
-        time = parameters.get("meal_time", "lunch")
+    response_text = ""
 
-        scored_items = [
-            (item, score_food(item, weather, preference, goal, time))
-            for item in FOOD_ITEMS
-            if item["name"] != recent_meal
-        ]
+    if intent == "start.recommendation":
+        response_text = "Do you have any food preferences? For example: spicy, healthy, or no preference."
 
-        top_items = sorted(scored_items, key=lambda x: x[1], reverse=True)[:3]
-        names = [item["name"] for item in top_items]
+    elif intent in ["spicy.preference", "healthy.preference", "no.preference"]:
+        # 没有 delivery 信息时继续追问
+        if not delivery:
+            response_text = "Do you prefer delivery or dine-in?"
+        else:
+            if "spicy" in food_pref:
+                response_text = build_response(food_recommendations["spicy"], "Here’s a spicy suggestion 🌶️")
+            elif "healthy" in food_pref:
+                response_text = build_response(food_recommendations["healthy"], "Here’s something healthy 🥗")
+            else:
+                response_text = build_response(food_recommendations["default"], "Here are some popular picks 🍴")
 
-        user_data[user_id]["history"].append({
-            "time": str(datetime.datetime.now()),
-            "recommendation": names
-        })
-        save_user_data(user_data)
+    elif intent in ["choose.delivery", "choosen.dinein"]:
+        if "spicy" in food_pref:
+            response_text = build_response(food_recommendations["spicy"], "Spicy and convenient! Try these:")
+        elif "healthy" in food_pref:
+            response_text = build_response(food_recommendations["healthy"], "Healthy options for your choice:")
+        else:
+            response_text = build_response(food_recommendations["default"], "Alright! Here are some tasty picks:")
 
-        response_text = f"Based on your preferences, I recommend: {', '.join(names)}."
-        return jsonify({"fulfillmentText": response_text}), 200
+    elif intent == "personalized.recommendation":
+        # 多参数推荐逻辑
+        if not food_pref:
+            response_text = "Do you have any food preferences? For example: spicy, healthy, or no preference."
+        elif not weather:
+            response_text = "What's the weather like? Cold or hot?"
+        else:
+            if "spicy" in food_pref:
+                response_text = build_response(food_recommendations["spicy"], "Spicy and bold 🌶️")
+            elif "healthy" in food_pref:
+                response_text = build_response(food_recommendations["healthy"], "Light and healthy 🍃")
+            elif weather == "cold":
+                response_text = build_response(food_recommendations["spicy"], "Cold day? Try these hot dishes 🔥")
+            elif weather == "hot":
+                response_text = build_response(food_recommendations["cold"], "Hot weather? Try something refreshing ❄️")
+            else:
+                response_text = build_response(food_recommendations["default"], "How about these:")
 
-    except Exception as e:
-        print("Error occurred:", e)
-        return jsonify({
-            "fulfillmentText": "Sorry, an error occurred in the backend."
-        }), 200
+    else:
+        response_text = "Sorry, I didn’t understand. Can you try again?"
+
+    return jsonify({"fulfillmentText": response_text})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
