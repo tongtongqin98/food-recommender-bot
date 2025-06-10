@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from user_data import add_recent_meal
+from user_data import get_recent_meals, add_recent_meal
 import os
 import json
 
@@ -45,12 +45,16 @@ food_recommendations = {
     "default": ["Ramen", "Sandwich", "Dumplings", "Donburi"]
 }
 
-def build_response(recommendations, context=""):
-    if not recommendations:
-        return "Hmm... I couldn't find anything tasty right now. 😢"
-    phrase = f"{context} You might enjoy {recommendations[0]}"
-    if len(recommendations) > 1:
-        phrase += f", or maybe {', '.join(recommendations[1:3])}."
+def build_response(recommendations, context="", user_id="default"):
+    recent = get_recent_meals(user_id)
+    filtered = [food for food in recommendations if food not in recent]
+
+    if not filtered:
+        return f"{context} But you’ve tried them all recently 😅. How about trying them again? {recommendations[0]}"
+    
+    phrase = f"{context} You might enjoy {filtered[0]}"
+    if len(filtered) > 1:
+        phrase += f", or maybe {', '.join(filtered[1:3])}."
     return phrase
 
 @app.route("/webhook", methods=["POST"])
@@ -79,10 +83,21 @@ def webhook():
         response_text = "Do you have any food preferences? For example: spicy, healthy, rice, pasta, or no preference."
 
     elif intent == "spicy.preference":
+        session = req.get("session", "")
+        user_id = session.split("/")[-1] if session else "default"
+    
         if spicy_type and spicy_type in food_recommendations["spicy"]:
-            response_text = build_response(food_recommendations["spicy"][spicy_type], f"Spicy ({spicy_type}) suggestion 🌶️")
+            response_text = build_response(
+                food_recommendations["spicy"][spicy_type],
+                f"Spicy ({spicy_type}) suggestion 🌶️",
+                user_id
+            )
         else:
-            response_text = build_response(food_recommendations["spicy"]["default"], "Here’s a spicy suggestion 🌶️")
+            response_text = build_response(
+                food_recommendations["spicy"]["default"],
+                "Here’s a spicy suggestion 🌶️",
+                user_id
+            )
 
     elif intent == "healthy.preference":
         response_text = build_response(food_recommendations["healthy"], "Healthy and delicious 🥗")
