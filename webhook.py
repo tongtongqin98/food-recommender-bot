@@ -1,4 +1,6 @@
 from flask import Flask, request, jsonify
+from flask import send_from_directory
+
 from user_data import get_recent_meals, add_recent_meal
 import os
 import json
@@ -6,6 +8,10 @@ import json
 app = Flask(__name__)
 
 USER_DATA_FILE = "user_data.json"
+
+@app.route('/picture/<filename>')
+def serve_picture(filename):
+    return send_from_directory('/Users/qintongtong/Documents/FoodRecommenderBot/picture', filename)
 
 # 用户数据处理函数
 def load_user_data():
@@ -61,13 +67,19 @@ def build_response(recommendations, context="", user_id="default"):
     filtered = [food for food in recommendations if food not in recent]
 
     if not filtered:
+        first = recommendations[0]
+        img_url = f"http://localhost:5000/picture/{first.lower().replace(' ', '_')}.jpg"
         return f"{context} But you’ve tried them all recently 😅. How about trying them again? {recommendations[0]}"
     
-    add_recent_meal(user_id, filtered[0])
+    first = filtered[0]
+    add_recent_meal(user_id, first)
+
+    img_url = f"http://localhost:5000/picture/{first.lower().replace(' ', '_')}.jpg"    
+    phrase = f"{context} You might enjoy {first}\n[Image]({img_url})"
     
-    phrase = f"{context} You might enjoy {filtered[0]}"
     if len(filtered) > 1:
         phrase += f", or maybe {', '.join(filtered[1:3])}."
+    
     return phrase
 
 @app.route("/webhook", methods=["POST"])
@@ -128,7 +140,14 @@ def webhook():
                 response_text = build_response(food_recommendations["cold"], "Hot weather? Try something refreshing ❄️")
             else:
                 response_text = build_response(food_recommendations["default"], "Here are some ideas:")
-
+    
+    elif intent == "cold.preference":
+        response_text = build_response(
+            food_recommendations["spicy"]["default"],
+            "It’s cold today ❄️. Try these hot dishes 🔥",
+            user_id
+        )
+        
     elif intent in ["rice.preference", "pasta.preference", "fastfood.preference"]:
         key = intent.split(".")[0]  # rice / pasta / fastfood
         if key in food_recommendations:
