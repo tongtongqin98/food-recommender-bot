@@ -42,7 +42,17 @@ food_recommendations = {
     "rice": ["Bibimbap", "Fried Rice", "Omurice", "Curry Rice"],
     "pasta": ["Spaghetti Bolognese", "Carbonara", "Cream Pasta", "Pesto Pasta"],
     "fastfood": ["Cheeseburger", "Fried Chicken", "French Fries", "Hot Dog"],
-    "default": ["Ramen", "Sandwich", "Dumplings", "Donburi"]
+    "default": ["Ramen", "Sandwich", "Dumplings", "Donburi"],
+    "health_goal": {
+        "lose weight": ["Quinoa Salad", "Steamed Vegetables", "Tofu Bowl"],
+        "gain muscle": ["Grilled Chicken", "Beef Bowl", "Protein Pasta"],
+        "stay healthy": ["Grilled Salmon", "Avocado Salad", "Vegetable Soup"]
+    },
+    "meal_time": {
+        "breakfast": ["Toast", "Omelette", "Yogurt Bowl", "Egg Sandwich", "Porridge", "Avocado Toast"],
+        "lunch": ["Bibimbap", "Curry Rice", "Chicken Salad", "Ramen"],
+        "dinner": ["Salmon Bowl", "Udon", "Grilled Vegetables", "Spaghetti", "Grilled Fish"]
+    }
 }
 
 # 推荐回复生成（避开最近食物）
@@ -77,7 +87,9 @@ def webhook():
     delivery = parameters.get("delivery_option", "").lower()
     spicy_type = parameters.get("spicy_type", "").lower()
     recent_meal = parameters.get("recent_meal", "").strip()
-
+    health_goal = parameters.get("health_goal", "").lower()
+    meal_time = parameters.get("meal_time", "").lower()
+  
     # 记录最近吃过的
     if recent_meal:
         add_recent_meal(user_id, recent_meal)
@@ -122,13 +134,38 @@ def webhook():
         if key in food_recommendations:
             response_text = build_response(food_recommendations[key], f"Suggestions for {key} 🍽️")
 
-    elif intent in ["choose.delivery", "choosen.dinein"]:
+    elif intent in ["choose.delivery", "choosen.dinein", "followup.delivery.option"]:
+        delivery = parameters.get("delivery_option", "").lower()
         recent = get_recent_meals(user_id)
-        if food_pref in food_recommendations:
-            choices = [m for m in food_recommendations[food_pref] if m not in recent]
-            response_text = build_response(choices, f"Here are some {food_pref} dishes:")
+
+        if delivery == "delivery":
+            if food_pref in food_recommendations:
+                choices = [m for m in food_recommendations[food_pref] if m not in recent]
+                response_text = build_response(choices, f"You chose delivery 🚚. Here are some {food_pref} options:")
+            else:
+                response_text = build_response(food_recommendations["default"], "You chose delivery 🚚. Here are some tasty picks:")
+    
+        elif delivery == "dine in":
+            if food_pref in food_recommendations:
+                choices = [m for m in food_recommendations[food_pref] if m not in recent]
+                response_text = build_response(choices, f"You prefer dining in 🍽️. Try these {food_pref} dishes:")
+            else:
+                response_text = build_response(food_recommendations["default"], "Dining in sounds good 🍽️. Try these dishes:")
+    
         else:
-            response_text = build_response(food_recommendations["default"], "Alright! Here are some tasty picks:")
+            response_text = "Do you prefer delivery or eating in?"
+
+    elif intent == "health.goal.recommendation":
+        if health_goal in food_recommendations["health_goal"]:
+            response_text = build_response(food_recommendations["health_goal"][health_goal], f"Suggestions for {health_goal} 💪:", user_id)
+        else:
+            response_text = "Could you tell me your health goal again? Like 'lose weight' or 'build muscle'."
+
+    elif intent == "meal.time.recommendation":
+        if meal_time in food_recommendations["meal_time"]:
+            response_text = build_response(food_recommendations["meal_time"][meal_time], f"{meal_time.capitalize()} options ☀️:", user_id)
+        else:
+            response_text = "Is it breakfast, lunch, or dinner time?"
 
     elif intent == "personalized.recommendation":
         recent = get_recent_meals(user_id)
