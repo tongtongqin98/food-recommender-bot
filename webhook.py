@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from user_data import add_recent_meal
 import os
 import json
 
@@ -125,7 +126,15 @@ def webhook():
             response_text = build_response(choices, "Cool choices for hot weather ❄️")
         else:
             response_text = build_response(food_recommendations["default"], "How about these:")
-
+    
+    elif intent == "record.recent.meal":
+        recent = parameters.get("recent_meal", "")
+        user_id = req.get("session", "anonymous").split("/")[-1]
+        if recent:
+            add_recent_meal(user_id, recent)
+            response_text = f"Thanks! I’ve noted that you had {recent}. I’ll avoid recommending it again."
+        else:
+            response_text = "Got it! Could you repeat the food you just had?"
     else:
         response_text = "Sorry, I didn’t understand. Can you try again?"
 
