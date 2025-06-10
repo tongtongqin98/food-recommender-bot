@@ -68,18 +68,16 @@ def build_response(recommendations, context="", user_id="default"):
 
     if not filtered:
         first = recommendations[0]
-        img_url = f"http://localhost:5000/picture/{first.lower().replace(' ', '_')}.jpg"
-        return f"{context} But you’ve tried them all recently 😅. How about trying them again? {recommendations[0]}"
+        img_url = f"https://food-recommender-bot.onrender.com/picture/{first.lower().replace(' ', '_')}.jpg"
+        return f"{context} But you’ve tried them all recently 😅. How about trying them again? {first}\n[Image]({img_url})"
     
     first = filtered[0]
     add_recent_meal(user_id, first)
-
-    img_url = f"http://localhost:5000/picture/{first.lower().replace(' ', '_')}.jpg"    
-    phrase = f"{context} You might enjoy {first}\n[Image]({img_url})"
+    img_url = f"https://food-recommender-bot.onrender.com/picture/{first.lower().replace(' ', '_')}.jpg"
     
+    phrase = f"{context} You might enjoy {first}\n[Image]({img_url})"
     if len(filtered) > 1:
         phrase += f", or maybe {', '.join(filtered[1:3])}."
-    
     return phrase
 
 @app.route("/webhook", methods=["POST"])
