@@ -1,7 +1,33 @@
 from flask import Flask, request, jsonify
 import os
+import json
 
 app = Flask(__name__)
+
+USER_DATA_FILE = "user_data.json"
+
+# 用户数据处理函数
+def load_user_data():
+    if os.path.exists(USER_DATA_FILE):
+        with open(USER_DATA_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_user_data(data):
+    with open(USER_DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+def get_recent_meals(user_id):
+    data = load_user_data()
+    return data.get(user_id, [])
+
+def add_recent_meal(user_id, meal):
+    data = load_user_data()
+    meals = data.get(user_id, [])
+    if meal not in meals:
+        meals.append(meal)
+    data[user_id] = meals[-5:]  # 只保留最近5个
+    save_user_data(data)
 
 # 食物推荐数据库
 food_recommendations = {
@@ -34,13 +60,19 @@ def webhook():
 
     intent = req.get("queryResult", {}).get("intent", {}).get("displayName", "")
     parameters = req.get("queryResult", {}).get("parameters", {})
+    session = req.get("session", "unknown_session")
+    user_id = session.split("/")[-1]  # 用 session id 作为用户唯一标识
 
     food_pref = parameters.get("food_preference", "").lower()
     weather = parameters.get("weather_type", "").lower()
     delivery = parameters.get("delivery_option", "").lower()
     spicy_type = parameters.get("spicy_type", "").lower()
+    recent_meal = parameters.get("recent_meal", "").strip()
 
     response_text = ""
+
+    if recent_meal:
+        add_recent_meal(user_id, recent_meal)
 
     if intent == "start.recommendation":
         response_text = "Do you have any food preferences? For example: spicy, healthy, rice, pasta, or no preference."
@@ -72,19 +104,25 @@ def webhook():
         if key in food_recommendations:
             response_text = build_response(food_recommendations[key], f"Suggestions for {key} 🍽️")
 
-    elif intent == "choose.delivery" or intent == "choosen.dinein":
+    elif intent in ["choose.delivery", "choosen.dinein"]:
+        recent = get_recent_meals(user_id)
         if food_pref in food_recommendations:
-            response_text = build_response(food_recommendations[food_pref], f"Here are some {food_pref} dishes:")
+            choices = [m for m in food_recommendations[food_pref] if m not in recent]
+            response_text = build_response(choices, f"Here are some {food_pref} dishes:")
         else:
             response_text = build_response(food_recommendations["default"], "Alright! Here are some tasty picks:")
 
     elif intent == "personalized.recommendation":
+        recent = get_recent_meals(user_id)
         if food_pref in food_recommendations:
-            response_text = build_response(food_recommendations[food_pref], f"Tailored pick for {food_pref}:")
+            choices = [m for m in food_recommendations[food_pref] if m not in recent]
+            response_text = build_response(choices, f"Tailored pick for {food_pref}:")
         elif weather == "cold":
-            response_text = build_response(food_recommendations["spicy"]["default"], "Cold day special 🔥")
+            choices = [m for m in food_recommendations["spicy"]["default"] if m not in recent]
+            response_text = build_response(choices, "Cold day special 🔥")
         elif weather == "hot":
-            response_text = build_response(food_recommendations["cold"], "Cool choices for hot weather ❄️")
+            choices = [m for m in food_recommendations["cold"] if m not in recent]
+            response_text = build_response(choices, "Cool choices for hot weather ❄️")
         else:
             response_text = build_response(food_recommendations["default"], "How about these:")
 
