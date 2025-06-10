@@ -1,6 +1,7 @@
 
 from flask import Flask, request, jsonify
 import os
+import random
 
 app = Flask(__name__)
 
@@ -18,9 +19,10 @@ food_recommendations = {
 def build_response(recommendations, context=""):
     if not recommendations:
         return "Hmm... I couldn't find anything tasty right now. 😢"
-    phrase = f"{context} You might enjoy {recommendations[0]}"
-    if len(recommendations) > 1:
-        phrase += f", or maybe {', '.join(recommendations[1:3])}."
+    picks = random.sample(recommendations, min(3, len(recommendations)))
+    phrase = f"{context} You might enjoy {picks[0]}"
+    if len(picks) > 1:
+        phrase += f", or maybe {', '.join(picks[1:])}."
     return phrase
 
 @app.route("/webhook", methods=["POST"])
@@ -32,9 +34,13 @@ def webhook():
     intent = req.get("queryResult", {}).get("intent", {}).get("displayName", "")
     parameters = req.get("queryResult", {}).get("parameters", {})
 
-    food_pref = parameters.get("food_preference", "").lower()
-    weather = parameters.get("weather_type", "").lower()
-    delivery = parameters.get("delivery_option", "").lower()
+    food_pref = parameters.get("food_preference", "")
+    weather = parameters.get("weather_type", "")
+    delivery = parameters.get("delivery_option", "")
+
+    food_pref = food_pref.lower() if food_pref else ""
+    weather = weather.lower() if weather else ""
+    delivery = delivery.lower() if delivery else ""
 
     response_text = ""
 
@@ -75,6 +81,14 @@ def webhook():
         else:
             response_text = build_response(food_recommendations["default"], "Alright! Here are some tasty picks:")
 
+    elif intent == "weather.based":
+        if weather == "cold":
+            response_text = build_response(food_recommendations["spicy"], "It's cold! Warm up with 🔥")
+        elif weather == "hot":
+            response_text = build_response(food_recommendations["cold"], "Hot weather? Try something refreshing ❄️")
+        else:
+            response_text = build_response(food_recommendations["default"], "Here are some ideas for today 🍽️")
+
     elif intent == "personalized.recommendation":
         if not food_pref:
             response_text = "Do you have any food preferences? For example: spicy, healthy, rice, pasta, or fast food."
@@ -101,6 +115,7 @@ def webhook():
     else:
         response_text = "Sorry, I didn’t understand. Can you try again?"
 
+    print("Replying with:", response_text)
     return jsonify({"fulfillmentText": response_text})
 
 if __name__ == "__main__":
