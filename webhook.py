@@ -45,12 +45,15 @@ food_recommendations = {
     "default": ["Ramen", "Sandwich", "Dumplings", "Donburi"]
 }
 
+# 推荐回复生成（避开最近食物）
 def build_response(recommendations, context="", user_id="default"):
     recent = get_recent_meals(user_id)
     filtered = [food for food in recommendations if food not in recent]
 
     if not filtered:
         return f"{context} But you’ve tried them all recently 😅. How about trying them again? {recommendations[0]}"
+    
+    add_recent_meal(user_id, filtered[0])
     
     phrase = f"{context} You might enjoy {filtered[0]}"
     if len(filtered) > 1:
@@ -68,24 +71,23 @@ def webhook():
     session = req.get("session", "unknown_session")
     user_id = session.split("/")[-1]  # 用 session id 作为用户唯一标识
 
+    # 参数获取
     food_pref = parameters.get("food_preference", "").lower()
     weather = parameters.get("weather_type", "").lower()
     delivery = parameters.get("delivery_option", "").lower()
     spicy_type = parameters.get("spicy_type", "").lower()
     recent_meal = parameters.get("recent_meal", "").strip()
 
-    response_text = ""
-
+    # 记录最近吃过的
     if recent_meal:
         add_recent_meal(user_id, recent_meal)
-
+    
+    response_text = ""
+    
     if intent == "start.recommendation":
         response_text = "Do you have any food preferences? For example: spicy, healthy, rice, pasta, or no preference."
 
     elif intent == "spicy.preference":
-        session = req.get("session", "")
-        user_id = session.split("/")[-1] if session else "default"
-    
         if spicy_type and spicy_type in food_recommendations["spicy"]:
             response_text = build_response(
                 food_recommendations["spicy"][spicy_type],
@@ -143,11 +145,9 @@ def webhook():
             response_text = build_response(food_recommendations["default"], "How about these:")
     
     elif intent == "record.recent.meal":
-        recent = parameters.get("recent_meal", "")
-        user_id = req.get("session", "anonymous").split("/")[-1]
-        if recent:
-            add_recent_meal(user_id, recent)
-            response_text = f"Thanks! I’ve noted that you had {recent}. I’ll avoid recommending it again."
+        if recent_meal:
+            add_recent_meal(user_id, recent_meal)
+            response_text = f"Thanks! I’ve noted that you had {recent_meal}. I’ll avoid recommending it again."        
         else:
             response_text = "Got it! Could you repeat the food you just had?"
     else:
