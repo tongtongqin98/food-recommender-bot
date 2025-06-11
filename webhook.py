@@ -178,25 +178,17 @@ def webhook():
 
         if health_goal in food_recommendations["health_goal"]:
             recommendations = food_recommendations["health_goal"][health_goal]
-            response = build_response(
-                recommendations,
-                f"Suggestions to help you {health_goal} 💪:",
-                user_id
-            )
+            response = build_response(recommendations, f"Suggestions to help you {health_goal} 💪:", user_id)
         else:
             response = {
                 "fulfillmentMessages": [
                     {
                         "text": {
-                            "text": [
-                                "Could you tell me your health goal again? Like 'lose weight' or 'gain muscle'."
-                            ]
+                            "text": ["Could you tell me your health goal again? For example, say 'lose weight' or 'gain muscle'."]
                         }
                     }
                 ]
             }
-
-        return jsonify(response)
         
     elif intent == "meal.time.recommendation":
         if meal_time in food_recommendations["meal_time"]:
