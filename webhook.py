@@ -173,11 +173,23 @@ def webhook():
             response_text = "Do you prefer delivery or eating in?"
 
     elif intent == "health.goal.recommendation":
-        if health_goal in food_recommendations["health_goal"]:
-            response_text = build_response(food_recommendations["health_goal"][health_goal], f"Suggestions for {health_goal} 💪:", user_id)
-        else:
-            response_text = "Could you tell me your health goal again? Like 'lose weight' or 'build muscle'."
-
+    health_goal_list = req['queryResult']['parameters'].get('health_goal', [])
+    health_goal = health_goal_list[0] if health_goal_list else ""
+    
+    if health_goal in food_recommendations["health_goal"]:
+        response_text = build_response(
+            food_recommendations["health_goal"][health_goal],
+            f"Suggestions for {health_goal} 💪:",
+            user_id
+        )
+    else:
+        response_text = {
+            "fulfillmentMessages": [
+                {"text": {"text": ["Could you tell me your health goal again? Like 'lose weight' or 'build muscle'."]}}
+            ]
+        }
+        return jsonify(response_text)
+        
     elif intent == "meal.time.recommendation":
         if meal_time in food_recommendations["meal_time"]:
             response_text = build_response(food_recommendations["meal_time"][meal_time], f"{meal_time.capitalize()} options ☀️:", user_id)
